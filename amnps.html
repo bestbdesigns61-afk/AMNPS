@@ -1,403 +1,1391 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-<!-- This site is hosted on Netlify. Anyone can build and deploy a site
-     like this one for free: https://netlify.new/?utm_campaign=ai-legible&utm_source=comment&utm_medium=referral&utm_id=92b16fc7-d90e-48af-a6a0-20b6a74e3273
-     Netlify hosting facts for this site: static/SSR served via Netlify Edge. -->
-<meta name="hosting-provider" content="Netlify">
-<meta name="netlify-deploy" content="https://netlify.new/?utm_campaign=ai-legible&amp;utm_source=meta&amp;utm_medium=referral&amp;utm_id=92b16fc7-d90e-48af-a6a0-20b6a74e3273">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMNPS 2019/2020 SET Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>AMNPS 2019/2020 SET · Class Chat</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Theme, animations & loaders -->
+    <script>
+        /* Apply saved theme BEFORE first paint (prevents flash) */
+        (function () {
+            var t = null;
+            try {
+                var params = new URLSearchParams(location.search);
+                t = params.get('theme') || localStorage.getItem('amnps_theme');
+            } catch (e) { }
+            if (t !== 'dark' && t !== 'light') {
+                t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+            }
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
+    <link rel="stylesheet" href="animations.css">
+    <!-- Supabase JS (auth, database, storage, realtime) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { background-color: #030712; }
-        .glass-panel {
-            background: rgba(11, 15, 25, 0.7);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        canvas {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; z-index: 10;
-        }
-        .table-container::-webkit-scrollbar {
-            height: 6px;
-        }
-        .table-container::-webkit-scrollbar-thumb {
-            background: #38bdf8;
-            border-radius: 10px;
-        }
+        /* body background + glass-panel are token-driven in animations.css (dark/light theme support) */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
     </style>
 </head>
-<body class="text-gray-100 font-sans min-h-screen flex flex-col items-center justify-center relative overflow-x-hidden p-4">
+<body class="t1 font-sans min-h-dvh flex flex-col items-center justify-center relative overflow-x-hidden p-0">
 
-    <!-- Fireworks Overlay -->
-    <canvas id="fireworksCanvas" class="hidden"></canvas>
+<!--
+═══ AMNPS 2019/2020 SET PRIVATE CLASS CHAT — SETUP (RUN ONCE IN SUPABASE) ═══
+The full, copy-paste SQL setup script is in the file  supabase-setup.sql
+next to this page. Quick steps:
+  1) Supabase -> SQL Editor -> paste ALL of supabase-setup.sql -> Run.
+  2) In that file replace every "you@example.com" with YOUR admin email, and
+     put the SAME email in ADMIN_EMAILS inside the main JavaScript block below.
+  3) Deploy amnps.html + animations.css to Netlify. Auth, chat, emoji,
+     pictures, admin panel, themes, animations and loaders all work.
+-->
 
-    <!-- ================= SCREEN 1: LOGIN PORTAL ================= -->
-    <div id="portalScreen" class="w-full max-w-md glass-panel p-8 rounded-3xl shadow-2xl text-center space-y-6">
-        <div class="space-y-2">
-            <h1 class="text-2xl font-extrabold tracking-wider text-sky-400">AMNPS</h1>
-            <p class="text-xs font-semibold text-gray-400 tracking-widest uppercase">2019/2020 SET</p>
+<!-- ==================== BOOT LOADER ==================== -->
+<div id="bootLoader" role="status" aria-live="polite">
+    <div class="boot-ring"></div>
+    <div class="boot-logo">AMNPS</div>
+    <div class="boot-sub">2019/2020 SET</div>
+</div>
+
+<!-- ==================== SCREEN 1 : AUTH (REGISTER / LOGIN) ==================== -->
+<div id="authScreen" class="w-full min-h-dvh flex flex-col items-center justify-center px-4 py-6 sm:py-10 relative">
+    <!-- Theme toggle (auth) -->
+    <button id="authThemeBtn" onclick="cycleTheme()" title="Toggle theme" aria-label="Toggle theme"
+        class="theme-btn absolute top-3 right-3 press">🌙</button>
+
+    <!-- Brand -->
+    <div class="mb-6 text-center space-y-1">
+        <h1 class="text-3xl font-extrabold tracking-wider text-sky-400">AMNPS</h1>
+        <p class="text-xs font-semibold t2 tracking-widest uppercase">2019/2020 SET · Class Chat 💬</p>
+    </div>
+
+    <div id="authCard" class="w-full max-w-md glass-panel p-6 sm:p-8 rounded-3xl shadow-2xl border bd">
+        <!-- Tabs -->
+        <div class="grid grid-cols-2 gap-2 p-1 rounded-xl sur border bd">
+            <button id="tabLogin" onclick="switchAuthTab('login')"
+                class="py-2 rounded-lg text-xs font-bold transition tracking-wide">Login</button>
+            <button id="tabRegister" onclick="switchAuthTab('register')"
+                class="py-2 rounded-lg text-xs font-bold transition tracking-wide">Register</button>
         </div>
-        <div class="border-t border-gray-800/60 my-2"></div>
-        <div class="space-y-4">
-            <h2 class="text-xl font-bold text-white">Welcome User</h2>
-            <div class="text-left space-y-2">
-                <label class="text-xs font-semibold text-gray-400 tracking-wider">Password</label>
-                <input type="password" id="gatePassword" placeholder="Enter password..." 
-                    class="w-full bg-[#0b0f19] border border-gray-700/80 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-sky-500 transition">
-                <p id="loginError" class="text-xs text-red-400 font-medium hidden">Incorrect code. Check again.</p>
+<!-- ============ LOGIN PANE ============ -->
+        <div id="paneLogin" class="space-y-4 mt-5">
+            <div class="space-y-1.5">
+                <label class="text-xs font-semibold t2 tracking-wider">Email</label>
+                <input id="loginEmail" type="email" autocomplete="email" enterkeyhint="next"
+                    placeholder="you@example.com"
+                    class="w-full sur border bd rounded-xl px-4 py-3 t1 text-sm focus:outline-none focus:border-sky-500 transition">
             </div>
-            <button onclick="verifyPortalPassword()" class="w-full bg-sky-500 hover:bg-sky-400 text-gray-950 font-bold py-3 px-4 rounded-xl transition duration-200 text-sm shadow-lg shadow-sky-500/10">
+            <div class="space-y-1.5">
+                <label class="text-xs font-semibold t2 tracking-wider">Password</label>
+                <div class="relative">
+                    <input id="loginPass" type="password" autocomplete="current-password" enterkeyhint="go"
+                        placeholder="••••••••"
+                        class="w-full sur border bd rounded-xl px-4 py-3 pr-12 t1 text-sm focus:outline-none focus:border-sky-500 transition">
+                    <button type="button" onclick="togglePass('loginPass')"
+                        class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold t3 hover:text-sky-400">SHOW</button>
+                </div>
+            </div>
+            <button onclick="submitLogin()" id="loginBtn"
+                class="w-full bg-sky-500 hover:bg-sky-400 text-gray-950 font-bold py-3 rounded-xl transition duration-200 text-sm shadow-lg shadow-sky-500/10">
                 Login
             </button>
-            <div class="relative flex py-1 items-center">
-                <div class="flex-grow border-t border-gray-800/40"></div>
-                <span class="flex-shrink mx-3 text-[10px] text-gray-500 font-bold tracking-widest uppercase">Or</span>
-                <div class="flex-grow border-t border-gray-800/40"></div>
-            </div>
-            <a class='w-full inline-block bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-300 font-bold py-3 px-4 rounded-xl transition duration-200 text-sm shadow-lg shadow-purple-500/5' href='/chat'>
-                Join Alumni Group Chat 💬
-            </a>
-        </div>
-        <div class="pt-4 text-xs text-gray-500 font-medium tracking-wide">© bestbdesigns 2026</div>
-    </div>
-
-    <!-- ================= SCREEN 2: MAIN DATA FORM ================= -->
-    <div id="formScreen" class="w-full max-w-md glass-panel p-6 rounded-3xl shadow-2xl space-y-6 hidden">
-        <div class="text-center">
-            <h1 class="text-md font-bold text-white tracking-wide">ADEOLU NURSERY AND PRIMARY SCHOOL</h1>
-            <p class="text-xs font-semibold text-sky-400 tracking-wider uppercase">2019/2020 SET</p>
-            <p class="text-xs text-gray-400 mt-2 italic">Fill the form correctly</p>
-        </div>
-        <form id="infoForm" onsubmit="handleFormSubmission(event)" class="space-y-4 text-sm">
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold text-gray-400">Name</label>
-                <input type="text" id="formName" required placeholder="Full Name" class="w-full bg-[#0b0f19] border border-gray-700/80 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-sky-500 transition">
-            </div>
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold text-gray-400">Nickname</label>
-                <input type="text" id="formNickname" required placeholder="Nickname" class="w-full bg-[#0b0f19] border border-gray-700/80 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-sky-500 transition">
-            </div>
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold text-gray-400">UTME Score</label>
-                <input type="number" id="formUtme" required placeholder="Input your score" class="w-full bg-[#0b0f19] border border-gray-700/80 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-sky-500 transition">
-            </div>
-            <div class="pt-1 text-xs font-bold text-gray-400 tracking-wide border-b border-gray-800/80 pb-1">Choice of Institution & Course</div>
-            <div class="grid grid-cols-1 gap-2 pl-2 border-l-2 border-sky-500/40">
-                <input type="text" id="formFirstInst" required placeholder="First Institution Choice" class="w-full bg-[#0b0f19] border border-gray-700/80 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-sky-500 transition text-xs">
-                <input type="text" id="formFirstCourse" required placeholder="Course" class="w-full bg-[#0b0f19] border border-gray-700/80 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-sky-500 transition text-xs">
-            </div>
-            <div class="grid grid-cols-1 gap-2 pl-2 border-l-2 border-purple-500/40">
-                <input type="text" id="formSecondInst" required placeholder="Second Institution Choice" class="w-full bg-[#0b0f19] border border-gray-700/80 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-sky-500 transition text-xs">
-                <input type="text" id="formSecondCourse" required placeholder="Course" class="w-full bg-[#0b0f19] border border-gray-700/80 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-sky-500 transition text-xs">
-            </div>
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold text-gray-400">E-Mail</label>
-                <input type="email" id="formEmail" required placeholder="example@gmail.com" class="w-full bg-[#0b0f19] border border-gray-700/80 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-sky-500 transition">
-            </div>
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold text-gray-400">Phone number</label>
-                <input type="tel" id="formPhone" required placeholder="Phone number" class="w-full bg-[#0b0f19] border border-gray-700/80 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-sky-500 transition">
-            </div>
-            <button id="saveBtn" type="submit" class="w-full mt-4 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold py-3 rounded-xl transition text-sm shadow-lg disabled:opacity-50">
-                Save Info
+            <button onclick="forgotPassword()" class="w-full text-center text-[11px] font-semibold t3 hover:text-sky-400 transition pt-1">
+                Forgot password?
             </button>
-        </form>
-        <div class="pt-2 text-center text-xs text-gray-500 font-medium tracking-wide">© bestbdesigns 2026</div>
-    </div>
-
-    <!-- ================= SCREEN 3: SUCCESS CONSOLE ================= -->
-    <div id="successScreen" class="w-full max-w-md glass-panel p-8 rounded-3xl shadow-2xl text-center space-y-6 hidden z-20">
-        <div class="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto text-emerald-400 text-3xl animate-bounce">✓</div>
-        <div class="space-y-2">
-            <h2 class="text-2xl font-black text-white tracking-wide">Successful!</h2>
-            <p class="text-sm text-gray-400">Your details have been registered into the alumni registry.</p>
         </div>
-        <button id="editBtn" onclick="enableEditMode()" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-xs font-bold px-6 py-2.5 rounded-xl transition">
-            Edit Info
-        </button>
-        <div class="pt-4 text-xs text-gray-500 font-medium tracking-wide">© bestbdesigns 2026</div>
-    </div>
 
-    <!-- ================= SCREEN 4: MASTER ADMIN DASHBOARD ================= -->
-    <div id="adminScreen" class="w-full max-w-6xl glass-panel p-6 rounded-3xl shadow-2xl space-y-6 hidden z-20">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-800 pb-4 gap-2">
-            <div>
-                <p class="text-xs text-sky-400 tracking-widest font-bold uppercase">Welcome ENOCH BOLUWATIFE 😊</p>
-                <h1 class="text-lg font-black text-white tracking-wide">ADEOLU NURSERY & PRIMARY SCHOOL 2019/2020 SET</h1>
+        <!-- ============ REGISTER PANE ============ -->
+        <div id="paneRegister" class="space-y-4 mt-5 hidden">
+            <div class="space-y-1.5">
+                <label class="text-xs font-semibold t2 tracking-wider">Display name</label>
+                <input id="regName" type="text" maxlength="40" enterkeyhint="next"
+                    placeholder="What should we call you?"
+                    class="w-full sur border bd rounded-xl px-4 py-3 t1 text-sm focus:outline-none focus:border-sky-500 transition">
             </div>
-            <button onclick="location.reload()" class="bg-red-500/10 border border-red-500/30 hover:bg-red-500 text-red-400 hover:text-white px-4 py-1.5 rounded-xl text-xs font-bold transition">Logout</button>
+            <div class="space-y-1.5">
+                <label class="text-xs font-semibold t2 tracking-wider">Email</label>
+                <input id="regEmail" type="email" autocomplete="email" enterkeyhint="next"
+                    placeholder="you@example.com"
+                    class="w-full sur border bd rounded-xl px-4 py-3 t1 text-sm focus:outline-none focus:border-sky-500 transition">
+            </div>
+            <div class="space-y-1.5">
+                <label class="text-xs font-semibold t2 tracking-wider">Password <span class="t3">(min 6 characters)</span></label>
+                <div class="relative">
+                    <input id="regPass" type="password" autocomplete="new-password" enterkeyhint="go"
+                        placeholder="••••••••" minlength="6"
+                        class="w-full sur border bd rounded-xl px-4 py-3 pr-12 t1 text-sm focus:outline-none focus:border-sky-500 transition">
+                    <button type="button" onclick="togglePass('regPass')"
+                        class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold t3 hover:text-sky-400">SHOW</button>
+                </div>
+            </div>
+            <div class="space-y-1.5">
+                <label class="text-xs font-semibold t2 tracking-wider">Chat bubble colour</label>
+                <div id="colorSwatches" class="flex flex-wrap gap-3"></div>
+            </div>
+            <button onclick="submitRegister()" id="regBtn"
+                class="w-full bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold py-3 rounded-xl transition duration-200 text-sm shadow-lg shadow-emerald-500/10">
+                Create my account
+            </button>
         </div>
-<!-- Reset Database Button -->
-<button 
-  onclick="resetAlumniDatabase()" 
-  class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-200 ease-in-out flex items-center gap-2 text-sm mt-4">
-  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-  </svg>
-  Reset All Portal Data
-</button>
 
-        <!-- Spreadsheet Container -->
-        <div class="table-container overflow-x-auto w-full rounded-xl border border-gray-800 bg-[#090d16]">
-            <table class="w-full text-left border-collapse text-xs">
-                <thead>
-                    <tr class="bg-[#111625] text-gray-300 font-bold border-b border-gray-800">
-                        <th class="p-3 border-r border-gray-800 text-center w-12">S/N</th>
-                        <th class="p-3 border-r border-gray-800 min-w-[140px]">Name / Nickname</th>
-                        <th class="p-3 border-r border-gray-800 text-center">UTME Score</th>
-                        <th class="p-3 border-r border-gray-800 min-w-[160px]">1st Choice Institution & Course</th>
-                        <th class="p-3 border-r border-gray-800 min-w-[160px]">2nd Choice Institution & Course</th>
-                        <th class="p-3 border-r border-gray-800 min-w-[150px]">Email</th>
-                        <th class="p-3 min-w-[120px]">Phone number</th>
-                    </tr>
-                </thead>
-                <tbody id="adminTableBody">
-                    <!-- Dynamic Rows are pushed here automatically -->
-                </tbody>
-            </table>
+        <p id="authError" class="text-xs text-red-400 font-medium mt-4 hidden text-center"></p>
+        <div class="pt-4 text-center text-xs t3 font-medium tracking-wide">© bestbdesigns 2026</div>
+    </div>
+</div>
+<!-- ==================== SCREEN 2 : CHAT ==================== -->
+<div id="chatScreen" class="hidden absolute inset-0 z-10 flex flex-col h-dvh">
+<!-- Header (responsive nav) -->
+    <header class="flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 border-b bd hdr">
+        <div class="flex items-center gap-3 min-w-0">
+            <div class="w-10 h-10 rounded-full bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-lg shrink-0">💬</div>
+            <div class="min-w-0 text-left">
+                <h2 class="text-sm font-extrabold t1 truncate">ADEOLU NURSERY &amp; PRIMARY SCHOOL</h2>
+                <p class="text-[10px] text-sky-400 tracking-widest uppercase">2019/2020 SET · Chat</p>
+            </div>
         </div>
-        <div class="pt-2 text-center text-xs text-gray-500 font-medium tracking-wide">© bestbdesigns 2026</div>
+
+        <!-- Desktop nav row (≥640px) -->
+        <div class="desktop-nav shrink-0">
+            <button id="chatThemeBtn" onclick="cycleTheme()" title="Toggle theme" aria-label="Toggle theme" class="theme-btn press">🌙</button>
+            <button id="profileBtn" onclick="openProfileModal()" title="Edit my profile" aria-label="My profile" class="nav-ico press">
+                <span id="myAvatarInitial">?</span>
+            </button>
+            <button id="memberMenuBtn" onclick="toggleMemberMenu()" title="Members" aria-label="Members" class="nav-ico press">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M12 3v8H4v4h8M2 5h20M3 12h18M3 20h18M6 10h1M6 14h1" /></svg>
+            </button>
+            <button id="gearBtn" onclick="openAdminPanel()" title="Admin panel" aria-label="Admin panel"
+                class="hidden nav-ico press bg-purple-500/10 border border-purple-500/30 text-purple-300">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .442c.008.379.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.43-.612.43-.991a7.723 7.723 0 010-.442c0-.379-.138-.75-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z" /><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            </button>
+            <button onclick="logout()" title="Logout"
+                class="h-10 px-3 rounded-xl bg-red-500/10 border border-red-500/30 hover:bg-red-500 text-red-400 hover:text-white text-xs font-bold transition press">Logout</button>
+        </div>
+
+        <!-- Mobile: theme toggle + hamburger -->
+        <div class="items-center gap-2 shrink-0 mobile-nav-hidden">
+            <button id="chatThemeBtnM" onclick="cycleTheme()" title="Toggle theme" aria-label="Toggle theme" class="theme-btn press">🌙</button>
+            <button id="hamburgerBtn" onclick="toggleMobileNav()" title="Menu" aria-label="Menu" class="press">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Mobile slide-down menu -->
+    <div id="mobileNav" role="menu">
+        <button onclick="openProfileModal()"><span>👤</span> My profile</button>
+        <button id="mobileGearBtn" onclick="openAdminPanel()" class="hidden"><span>🛡️</span> Admin panel</button>
+        <button onclick="toggleMemberMenu()"><span>👥</span> Classmates</button>
+        <div class="nav-divider"></div>
+        <button onclick="cycleTheme()"><span id="mobileThemeLabel">🌙</span> <span id="mobileThemeText">Theme</span></button>
+        <div class="nav-divider"></div>
+        <button onclick="logout()" style="color:#f87171"><span>🚪</span> Logout</button>
     </div>
 
-    <!-- ================= DATABASE ARCHITECTURE ENGINE ================= -->
-    <script>
-        // System Config Keys
-        const USER_KEY = "#*+77//$amnps__";
-        const ADMIN_KEY = "676677--+&#)!$6;9()";
+    <!-- Members flyout -->
+    <div id="memberMenu" class="hidden absolute right-3 top-16 w-64 max-h-96 overflow-y-auto glass-panel rounded-2xl border bd z-40 text-xs">
+        <p class="px-4 py-2 font-bold text-sky-400 tracking-widest uppercase text-[10px]">Classmates</p>
+        <div id="memberList" class="p-2 t3">Loading…</div>
+    </div>
+    <!-- Lock banner -->
+    <div id="lockBanner" class="hidden px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-2 anim-drop">
+        🔒 Chat is locked — only the admin can send messages right now.
+    </div>
 
-        // ⚠️ PASTE YOUR SUPABASE CREDENTIALS HERE:
-        const SUPABASE_URL = "https://oqpixyymorntpiwdhtjw.supabase.co"; 
-        const SUPABASE_KEY = "sb_publishable_emk3px7D8Rrmgo985ajPfQ_saGRDMca";
 
-        // State Trackers
-        let modificationCounter = 0;
-        let currentRecordId = null;
+    <!-- Message feed -->
+    <div id="feed" class="flex-1 overflow-y-auto px-3 sm:px-4 py-3 bg-transparent">
+        <div id="msgEmpty" class="text-center t3 text-sm py-10">No messages yet — say hi 👋</div>
+        <div id="msgList"></div>
+    </div>
 
-        function verifyPortalPassword() {
-            const pin = document.getElementById('gatePassword').value.trim();
-            const err = document.getElementById('loginError');
+    <!-- Composer -->
+    <footer class="border-t bd ftr p-3 sm:p-4">
+        <div id="cPreview" class="hidden flex flex-wrap gap-3 mb-2"></div>
+        <div class="flex items-end gap-2">
+            <button id="emojiBtn" onclick="toggleEmojiPicker()" title="Emoji"
+                class="h-11 w-11 shrink-0 rounded-xl sur border bd hover:border-sky-500 text-xl flex items-center justify-center">😊</button>
+            <div id="emojiPicker" class="hidden absolute bottom-24 left-2 right-2 sm:w-80 sm:left-auto max-h-72 overflow-y-auto glass-panel rounded-2xl border bd z-40 shadow-2xl anim-drop"></div>
+            <label for="fileInput" title="Send a picture" class="h-11 w-11 shrink-0 rounded-xl sur border bd hover:border-emerald-500 flex items-center justify-center cursor-pointer">
+                <svg class="w-5 h-5 t2" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M4 5h16M3 11h18M3 15h18M6 2h12M6 20h12M20 5.5a3 2.5 0 011.5-3M9 3.5a3 2.5 0 012.5 11M17 2.5a3 2.5 0 011.5-3.5M17 17a3 2.5 0 011.5 3.5M9 17a3 2.5 0 011.5 3.5M4 9h3M4 15h3M20 9h3M20 15h3M3 6a2 4 0 011 2M5 14a2 4 0 011 2M19 6a2 4 0 011 2M17 14a2 4 0 011 2" /></svg>
+            </label>
+            <input id="fileInput" type="file" accept="image/*" multiple class="hidden" onchange="onPickedImages(event)">
+            <textarea id="textInput" rows="1" enterkeyhint="send" placeholder="Type a message…"
+                class="flex-1 min-h-11 max-h-36 resize-none sur border bd rounded-2xl px-4 py-2.5 t1 text-sm focus:outline-none focus:border-sky-500 transition"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+            <button id="announceBtn" onclick="toggleAnnounceMode()" title="Send as announcement (admin only)"
+                class="hidden h-11 w-11 shrink-0 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/30 text-sm flex items-center justify-center">📢</button>
+            <button id="sendBtn" onclick="sendMessage()" title="Send"
+                class="h-11 min-w-11 px-3 shrink-0 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold flex items-center justify-center disabled:opacity-40 transition">
+                <span class="text-sm">Send</span>
+            </button>
+        </div>
+        <p id="composerNote" class="mt-1 text-[10px] t3"></p>
+    </footer>
+</div>
+<!-- ==================== BANNED OVERLAY ==================== -->
+<div id="bannedScreen" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center">
+    <div class="w-full max-w-md glass-panel p-8 rounded-3xl shadow-2xl text-center anim-scale">
+        <div class="text-5xl mb-4">🚫</div>
+        <h2 class="text-2xl font-black t1">You're banned</h2>
+        <p id="bannedReason" class="text-sm t2 mt-2">You can no longer take part in this chat.</p>
+        <button onclick="logout()" class="mt-5 w-full bg-red-500/10 border border-red-500/30 hover:bg-red-500 text-red-400 hover:text-white font-bold py-3 rounded-xl transition text-sm">
+            Logout
+        </button>
+    </div>
+</div>
 
-            if (pin === USER_KEY) {
-                err.classList.add('hidden');
-                document.getElementById('portalScreen').classList.add('hidden');
-                document.getElementById('formScreen').classList.remove('hidden');
-            } else if (pin === ADMIN_KEY) {
-                err.classList.add('hidden');
-                document.getElementById('portalScreen').classList.add('hidden');
-                renderAdminDashboard();
-            } else {
-                err.classList.remove('hidden');
-            }
-        }
+<!-- ==================== LIGHTBOX (tap to zoom) ==================== -->
+<div id="lightbox" class="hidden fixed inset-0 z-50 bg-black/95 flex items-center justify-center anim-fade" onclick="closeLightbox()">
+    <button class="absolute top-4 right-4 z-10 h-11 w-11 rounded-full bg-white/10 hover:bg-red-500 text-white text-lg font-bold">✕</button>
+    <div id="lbSpin" class="lb-spin"></div>
+    <img id="lightboxImg" src="" alt="Full size preview" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl">
+</div>
 
-        async function handleFormSubmission(event) {
-            event.preventDefault();
-            const saveBtn = document.getElementById('saveBtn');
-            saveBtn.disabled = true;
+<!-- ==================== CONFIRM DIALOG ==================== -->
+<div id="confirmModal" class="hidden fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center">
+    <div class="w-full max-w-sm glass-panel p-6 rounded-3xl shadow-2xl anim-scale">
+        <h3 id="confirmTitle" class="text-base font-bold t1">Are you sure?</h3>
+        <p id="confirmMsg" class="text-xs t2 mt-2"></p>
+        <div class="flex gap-3 mt-5">
+            <button id="confirmOk" onclick="runConfirmOk()" class="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-3 rounded-xl transition">Yes</button>
+            <button onclick="closeConfirm()" class="flex-1 btn-ghost t1 text-xs font-bold py-3 rounded-xl transition">Cancel</button>
+        </div>
+    </div>
+</div>
 
-            if (modificationCounter >= 2) {
-                alert("You can't edit this info again.");
-                saveBtn.disabled = false;
-                return;
-            }
+<!-- ==================== PROFILE EDIT MODAL ==================== -->
+<div id="profileModal" class="hidden fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center overflow-y-auto py-6">
+    <div class="w-full max-w-sm glass-panel p-6 rounded-3xl shadow-2xl space-y-4 anim-scale">
+        <h3 class="text-base font-bold t1">Edit my profile</h3>
+        <div class="space-y-1.5">
+            <label class="text-xs font-semibold t2">Display name</label>
+            <input id="profName" type="text" maxlength="40" placeholder="Display name"
+                class="w-full sur border bd rounded-xl px-4 py-2.5 t1 text-sm focus:outline-none focus:border-sky-500 transition">
+        </div>
+        <div class="space-y-1.5">
+            <label class="text-xs font-semibold t2">Bubble colour</label>
+            <div id="profSwatches" class="flex flex-wrap gap-3"></div>
+        </div>
+        <button onclick="saveProfile()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold py-3 rounded-xl transition text-sm">Save changes</button>
+        <button onclick="closeProfileModal()" class="w-full btn-ghost t1 font-bold py-2.5 rounded-xl transition text-xs">Close</button>
+    </div>
+</div>
+<!-- ==================== ADMIN PANEL ==================== -->
+<div id="adminPanel" class="hidden fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center overflow-y-auto py-4">
+    <div class="w-full max-w-3xl glass-panel rounded-3xl shadow-2xl border border-purple-500/20 flex flex-col max-h-[92dvh] anim-scale">
+        <div class="flex items-center justify-between px-5 py-4 border-b bd">
+            <div>
+                <p class="text-[10px] text-purple-300 tracking-widest font-bold uppercase">Admin · ENOCH BOLUWATIFE 😊</p>
+                <h3 class="text-base font-black t1">Chat Control Room</h3>
+            </div>
+            <button onclick="closeAdminPanel()" class="h-10 w-10 rounded-xl bg-red-500/10 border border-red-500/30 hover:bg-red-500 text-red-400 hover:text-white text-sm font-bold">✕</button>
+        </div>
 
-            // Payload bundle setup
-            const recordData = {
-                name: document.getElementById('formName').value.trim(),
-                nickname: document.getElementById('formNickname').value.trim(),
-                utme: parseInt(document.getElementById('formUtme').value.trim()) || 0,
-                first_inst: document.getElementById('formFirstInst').value.trim(),
-                first_course: document.getElementById('formFirstCourse').value.trim(),
-                second_inst: document.getElementById('formSecondInst').value.trim(),
-                second_course: document.getElementById('formSecondCourse').value.trim(),
-                email: document.getElementById('formEmail').value.trim(),
-                phone: document.getElementById('formPhone').value.trim()
-            };
+        <div class="grid grid-cols-2 gap-1 p-1 rounded-xl sur border bd">
+            <button onclick="adminTab('members')" id="admTabMembers"
+                class="py-2 rounded-lg text-xs font-bold transition">👥 Members</button>
+            <button onclick="adminTab('tools')" id="admTabTools"
+                class="py-2 rounded-lg text-xs font-bold transition">🛠️ Tools</button>
+        </div>
 
-            try {
-                let response;
-                
-                if (modificationCounter === 1 && currentRecordId) {
-                    // Edit Mode: Update entry matching the assigned specific row ID
-                    response = await fetch(`${SUPABASE_URL}/rest/v1/alumni_records?id=eq.${currentRecordId}`, {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'apikey': SUPABASE_KEY,
-                            'Authorization': `Bearer ${SUPABASE_KEY}`
-                        },
-                        body: JSON.stringify(recordData)
-                    });
-                    modificationCounter = 2; // Burn access right permanently
-                    document.getElementById('editBtn').classList.add('hidden');
-                } else {
-                    // Initial Mode: Insert brand new row into table architecture
-                    response = await fetch(`${SUPABASE_URL}/rest/v1/alumni_records`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'apikey': SUPABASE_KEY,
-                            'Authorization': `Bearer ${SUPABASE_KEY}`,
-                            'Prefer': 'return=representation'
-                        },
-                        body: JSON.stringify(recordData)
-                    });
-                    
-                    const responseData = await response.json();
-                    if (responseData && responseData[0]) {
-                        currentRecordId = responseData[0].id; // Save unique row identifier
-                    }
-                    modificationCounter = 1;
-                }
+        <!-- ── MEMBERS TAB ── -->
+        <div id="admMembersPane" class="flex-1 overflow-y-auto px-4 py-3">
+            <p id="admMembersHint" class="text-[10px] t3 mb-2">Only you can see this list. Tap a member to ban/unban.</p>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="sur2 t2 font-bold border-b bd">
+                            <th class="p-2 text-left">Member</th>
+                            <th class="p-2 text-center">Status</th>
+                            <th class="p-2 text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admMembersBody">
+                        <tr><td colspan="3" class="p-4 text-center t3 animate-pulse">Loading members…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-                if (!response.ok) throw new Error("Supabase Transaction Interrupted");
+        <!-- ── TOOLS TAB ── -->
+        <div id="admToolsPane" class="hidden flex-1 overflow-y-auto px-4 py-3 space-y-5">
+            <div>
+                <p class="text-xs font-bold t2 mb-1">🔎 Search messages</p>
+                <input id="admSearch" type="text" placeholder="Search by text or sender name…" oninput="applySearch(this.value)"
+                    class="w-full sur border bd rounded-xl px-4 py-2.5 t1 text-sm focus:outline-none focus:border-purple-400 transition">
+                <p id="admSearchInfo" class="text-[10px] t3 mt-1"></p>
+            </div>
+            <div>
+                <p class="text-xs font-bold t2 mb-1">🔒 Chat lock</p>
+                <div class="flex items-center justify-between gap-3">
+                    <p class="text-[10px] t3">While locked, only you can send messages. Everyone else sees the lock banner.</p>
+                    <button id="admLockBtn" onclick="toggleChatLock()"
+                        class="shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition disabled:opacity-50">…</button>
+                </div>
+            </div>
+            <div>
+                <p class="text-xs font-bold t2 mb-1">📥 Export chat history</p>
+                <p class="text-[10px] t3 mb-2">Download the entire conversation as a plain-text file.</p>
+                <button onclick="exportChat()" class="w-full bg-sky-500/10 border border-sky-500/30 hover:bg-sky-500 text-sky-400 hover:text-white text-xs font-bold py-2.5 rounded-xl transition">Download .txt</button>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-red-400 mb-1">🗑️ Danger zone</p>
+                <p class="text-[10px] t3 mb-2">Delete every message in the chat. This cannot be undone.</p>
+                <button onclick="clearChat()" class="w-full bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2.5 rounded-xl transition">Delete all messages</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   AMNPS 2019/2020 SET · Class Chat — main application
+   ═══════════════════════════════════════════════════════════════════════ */
+'use strict';
 
-                document.getElementById('formScreen').classList.add('hidden');
-                document.getElementById('successScreen').classList.remove('hidden');
-                startFireworksShow();
+/* ── CONFIG ─────────────────────────────────────────────────────────── */
+const SUPABASE_URL = "https://lucdgfxiowqpprspnssj.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_bS-juATQ_VsK9z72kORCEQ_92E_-L8A";
+const ADMIN_EMAILS = ["enochboluwatife09@gmail.com"];  /* ⚠️ set YOUR admin email here (same one used in supabase-setup.sql) */
+const MAX_IMAGE_MB  = 5;
+const HISTORY_LIMIT = 120;
 
-            } catch (err) {
-                console.error(err);
-                alert("Database save failed. Double-check your Supabase credentials or network connectivity.");
-            } finally {
-                saveBtn.disabled = false;
-            }
-        }
+const AVATAR_COLORS = ['#38bdf8','#22c55e','#a855f7','#f43f5e','#eab308','#06b6d4','#f97316','#ec4899'];
+const EMOJIS = ['😀','😂','😍','😎','🤔','😅','😭','😡','🥳','😴','🤯','😇','🫡','🙌','👍','👏','💪','🤝','✌️','🙏','👌','❤️','💔','💯','🔥','✨','⚡','🎉','🎊','🎓','🏆','⭐','☀️','🌙','🌈','⚽','🏀','🎮','🎵','📚','🍕','🍿','☕','🌍','🚀','💰','👀','🫶','🤗','😜','🙃'];
 
-        function enableEditMode() {
-            stopFireworksShow();
-            if (modificationCounter >= 2) {
-                alert("You can't edit this info again.");
-                return;
-            }
-            document.getElementById('successScreen').classList.add('hidden');
-            document.getElementById('formScreen').classList.remove('hidden');
-        }
+/* ── STATE ──────────────────────────────────────────────────────────── */
+let sb = null;                 /* supabase client            */
+let uid = null;                /* my user id                 */
+let myProfile = null;          /* my profiles row            */
+let isAdmin = false;
+let locked = false;
+let announceMode = false;
+let confirmOkFn = null;
+const synced = {};             /* known message ids          */
+const messages = [];           /* chronological message list */
+const pendingImages = [];      /* { file, preview }          */
+let regColor = null, profColor = null;
+let emojiOpen = false, memberMenuOpen = false, msgMenuId = null;
+let bannedNow = false;
+let recoveryPending = false;
+let testing = new URLSearchParams(location.search).get('preview') !== null;
 
-        async function renderAdminDashboard() {
-            document.getElementById('adminScreen').classList.remove('hidden');
-            const tbody = document.getElementById('adminTableBody');
-            tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-500 animate-pulse">Pulling live database records...</td></tr>`;
+/* ── HELPERS ────────────────────────────────────────────────────────── */
+const $  = id => document.getElementById(id);
+const hide = id => { const e = $(id); if (e) e.classList.add('hidden'); };
+const show = id => { const e = $(id); if (e) e.classList.remove('hidden'); };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => n < 10 ? '0' + n : '' + n;
+function fmtTime(ts) {
+    const d = new Date(ts), now = new Date();
+    const hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+    if (d.toDateString() === now.toDateString()) return hm;
+    return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + hm;
+}
+function fmtFull(ts) {
+    const d = new Date(ts);
+    return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+function fmtShort(ts) {
+    const d = new Date(ts);
+    return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + String(d.getFullYear()).slice(2);
+}
+function relTime(ts) {
+    const diff = Date.now() - new Date(ts).getTime();
+    if (diff < 120000) return 'active now';
+    if (diff < 3600000) return Math.max(1, Math.floor(diff / 60000)) + 'm ago';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+    return fmtShort(ts);
+}
+const initials = name => { const t = (name || '?').trim(); return t ? t.slice(0, 1).toUpperCase() : '?'; };
 
-            try {
-                const response = await fetch(`${SUPABASE_URL}/rest/v1/alumni_records?select=*&order=created_at.asc`, {
-                    method: 'GET',
-                    headers: {
-                        'apikey': SUPABASE_KEY,
-                        'Authorization': `Bearer ${SUPABASE_KEY}`
-                    }
-                });
-
-                if (!response.ok) throw new Error("Data fetch exception occurred");
-                
-                const data = await response.json();
-                tbody.innerHTML = "";
-
-                if (data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-500">No classmate records submitted yet.</td></tr>`;
-                    return;
-                }
-
-                data.forEach((item, index) => {
-                    const tr = document.createElement('tr');
-                    tr.className = "border-b border-gray-800 hover:bg-gray-900/40 transition";
-                    tr.innerHTML = `
-                        <td class="p-3 border-r border-gray-800 text-center font-bold text-gray-400">${index + 1}</td>
-                        <td class="p-3 border-r border-gray-800 font-semibold text-white">${item.name} <br><span class="text-sky-400 text-[11px] font-normal">(${item.nickname})</span></td>
-                        <td class="p-3 border-r border-gray-800 text-center font-mono font-bold text-emerald-400">${item.utme}</td>
-                        <td class="p-3 border-r border-gray-800 text-gray-300">${item.first_inst} <br><span class="text-gray-500 text-[11px]">${item.first_course}</span></td>
-                        <td class="p-3 border-r border-gray-800 text-gray-300">${item.second_inst} <br><span class="text-gray-500 text-[11px]">${item.second_course}</span></td>
-                        <td class="p-3 border-r border-gray-800 text-gray-400">${item.email}</td>
-                        <td class="p-3 text-gray-400 font-mono">${item.phone}</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-
-            } catch (err) {
-                console.error(err);
-                tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-red-400">Failed to render live data from Supabase structure.</td></tr>`;
-            }
-        }
-    </script>
-
-    <!-- ================= PROCEDURAL FIREWORKS ENGINE ================= -->
-    <script>
-        const canvas = document.getElementById('fireworksCanvas');
-        const ctx = canvas.getContext('2d');
-        let animationId = null, particles = [];
-
-        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-        class Particle {
-            constructor(x, y, color) {
-                this.x = x; this.y = y; this.color = color;
-                this.radius = Math.random() * 2 + 1;
-                const angle = Math.random() * Math.PI * 2, speed = Math.random() * 5 + 2;
-                this.vX = Math.cos(angle) * speed; this.vY = Math.sin(angle) * speed;
-                this.alpha = 1; this.decay = Math.random() * 0.015 + 0.01;
-            }
-            draw() {
-                ctx.save(); ctx.globalAlpha = this.alpha; ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = this.color; ctx.fill(); ctx.restore();
-            }
-            update() { this.x += this.vX; this.y += this.vY; this.vY += 0.04; this.alpha -= this.decay; }
-        }
-        function createExplosion() {
-            const x = Math.random() * canvas.width, y = Math.random() * (canvas.height * 0.5);
-            const hues = [45, 140, 200, 290, 350]; const selectedHue = hues[Math.floor(Math.random() * hues.length)];
-            for (let i = 0; i < 35; i++) particles.push(new Particle(x, y, `hsl(${selectedHue}, 100%, 60%)`));
-        }
-        function loop() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (Math.random() < 0.04) createExplosion();
-            particles.forEach((p, idx) => { if (p.alpha <= 0) particles.splice(idx, 1); else { p.update(); p.draw(); } });
-            animationId = requestAnimationFrame(loop);
-        }
-        function startFireworksShow() { canvas.classList.remove('hidden'); window.addEventListener('resize', resizeCanvas); resizeCanvas(); createExplosion(); loop(); }
-        function stopFireworksShow() { canvas.classList.add('hidden'); cancelAnimationFrame(animationId); particles = []; }
-        async function resetAlumniDatabase() {
-    // 1. First safety check
-    const firstCheck = confirm("⚠️ WARNING: Are you absolutely sure you want to clear the entire database? This will permanently delete all student submissions.");
-    if (!firstCheck) return;
-
-    // 2. Second safety check to prevent accidental double-clicks
-    const secondCheck = confirm("🛑 FINAL CONFIRMATION: This action CANNOT be undone. Are you 100% sure?");
-    if (!secondCheck) return;
-
+function toast(msg, kind) {
     try {
-        // Since RLS is disabled, we can execute a delete on all rows by matching a filter that is always true
-        // In PostgreSQL, telling it to delete rows where 'id' is greater than 0 clears out everything safely
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/alumni_records?id=gt.0`, {
-            method: "DELETE",
-            headers: {
-                "apikey": SUPABASE_KEY,
-                "Authorization": `Bearer ${SUPABASE_KEY}`,
-                "Content-Type": "application/json"
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error("Failed to clear database columns on Supabase.");
-        }
-
-        alert("💥 Success! The database has been completely reset and all records were deleted.");
-        
-        // Refresh the page automatically so the dashboard table updates to show it's empty
-        location.reload();
-
-    } catch (error) {
-        console.error("Reset Error:", error);
-        alert("Error resetting database: " + error.message);
-    }
+        const t = document.createElement('div');
+        t.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-[90] px-4 py-2.5 rounded-xl text-xs font-bold shadow-2xl border transition-all duration-300 ' +
+            (kind === 'err' ? 'bg-red-500/15 border-red-500/40 text-red-300'
+                : kind === 'ok' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                    : 'sur border bd t1');
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 350); }, 3000);
+    } catch (e) { /* ignore */ }
 }
 
-    </script>
+function buildSwatches(elId, onPick) {
+    const el = $(elId);
+    if (!el) return;
+    el.innerHTML = '';
+    AVATAR_COLORS.forEach(c => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'h-9 w-9 rounded-full border-2 transition';
+        b.style.background = c;
+        b.title = c;
+        b.onclick = () => {
+            el.querySelectorAll('button').forEach(x => x.classList.remove('ring-2', 'ring-white/80'));
+            b.classList.add('ring-2', 'ring-white/80');
+            onPick(c);
+        };
+        el.appendChild(b);
+    });
+}
+function markSwatch(elId, color) {
+    const el = $(elId);
+    if (!el) return;
+    el.querySelectorAll('button').forEach(x => x.classList.remove('ring-2', 'ring-white/80'));
+    const target = Array.from(el.querySelectorAll('button')).find(b => b.style.background === color);
+    if (target) target.classList.add('ring-2', 'ring-white/80');
+}
+
+function userFriendlyErr(e) {
+    const m = String((e && (e.message || e.error_description)) || (e ? String(e) : ''));
+    const low = m.toLowerCase();
+    if (low.includes('invalid login') || low.includes('invalid credentials')) return 'Wrong email or password. Check again.';
+    if (low.includes('already registered') || low.includes('already been registered')) return 'That email is already registered — tap Login instead.';
+    if (low.includes('password should be at least')) return 'Password must be at least 6 characters.';
+    if (low.includes('rate limit') || low.includes('too many')) return 'Too many attempts — wait a moment and retry.';
+    if (low.includes('failed to fetch') || low.includes('network') || low.includes('offline')) return 'Network problem — check your connection.';
+    if (low.includes('row-level security') || low.includes('violates')) return "You can't do that right now — check the chat lock or your status.";
+    return (m.slice(0, 150) || 'Something went wrong.');
+}
+
+function showAuthError(msg) {
+    const el = $('authError');
+    el.textContent = msg;
+    show(el.id);
+}
+function setBusy(btn, text) {
+    btn.disabled = true;
+    btn.dataset.orig = btn.innerHTML;
+    btn.classList.add('btn-spinner');
+    btn.innerHTML = '<span class="spin"></span><span>' + text + '</span>';
+}
+function setFree(btn, text) {
+    btn.disabled = false;
+    btn.classList.remove('btn-spinner');
+    btn.innerHTML = text || btn.dataset.orig || '';
+}
+/* ── AUTH UI ─────────────────────────────────────────────────────────── */
+function switchAuthTab(tab) {
+    const isLogin = tab === 'login';
+    $('paneLogin').classList.toggle('hidden', !isLogin);
+    $('paneRegister').classList.toggle('hidden', isLogin);
+    const active = 'bg-sky-500 text-gray-950 font-bold shadow shadow-sky-500/20';
+    const idle = 't2 hover-soft';
+    $('tabLogin').className = 'py-2 rounded-lg text-xs font-bold transition tracking-wide ' + (isLogin ? active : idle);
+    $('tabRegister').className = 'py-2 rounded-lg text-xs font-bold transition tracking-wide ' + (isLogin ? idle : active);
+    hide('authError');
+}
+function togglePass(id) {
+    const i = $(id);
+    i.type = i.type === 'password' ? 'text' : 'password';
+}
+
+function emailValid(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()); }
+
+async function submitLogin() {
+    const email = $('loginEmail').value.trim(), pass = $('loginPass').value;
+    if (!email || !pass) { showAuthError('Enter your email and password.'); return; }
+    const btn = $('loginBtn');
+    setBusy(btn, 'Logging in…');
+    try {
+        if (!sb) throw new Error('offline');
+        const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+        if (error) throw error;
+        if (testing) runPreview('member');
+        else await bootstrap();
+    } catch (e) { console.error(e); showAuthError(userFriendlyErr(e)); }
+    finally { setFree(btn, 'Login'); }
+}
+
+async function submitRegister() {
+    const name = $('regName').value.trim(), email = $('regEmail').value.trim(), pass = $('regPass').value;
+    if (!name) { showAuthError('Enter a display name.'); return; }
+    if (!emailValid(email)) { showAuthError('That email address looks wrong.'); return; }
+    if (pass.length < 6) { showAuthError('Password must be at least 6 characters.'); return; }
+    const btn = $('regBtn');
+    setBusy(btn, 'Creating account…');
+    try {
+        if (!sb) throw new Error('offline');
+        const color = regColor || AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+        const { data, error } = await sb.auth.signUp({
+            email, password: pass,
+            options: { data: { display_name: name, avatar_color: color } }
+        });
+        if (error) throw error;
+        if (data.session) { if (testing) runPreview('member'); else await bootstrap(); }
+        else {
+            toast('Account created — check your email to confirm, then login. ✉️', 'ok');
+            switchAuthTab('login');
+        }
+    } catch (e) { console.error(e); showAuthError(userFriendlyErr(e)); }
+    finally { setFree(btn, 'Create my account'); }
+}
+
+async function forgotPassword() {
+    const email = $('loginEmail').value.trim();
+    if (!emailValid(email)) { showAuthError('Enter your email above first.'); return; }
+    try {
+        await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+        toast('Password reset link sent. 📬 (if that account exists)', 'ok');
+    } catch (e) { toast(userFriendlyErr(e), 'err'); }
+}
+
+function showAuthScreen() {
+    hide('chatScreen'); hide('bannedScreen'); hide('adminPanel');
+    hide('profileModal'); hide('confirmModal'); hide('lightbox');
+    $('loginPass').value = ''; $('regPass').value = '';
+    switchAuthTab('login');
+    show('authScreen');
+}
+function resetToAuth() {
+    if (sb) { try { sb.removeAllChannels(); } catch (e) { /* ignore */ } }
+    uid = null; myProfile = null; isAdmin = false; locked = false;
+    Object.keys(synced).forEach(k => delete synced[k]);
+    messages.length = 0; pendingImages.length = 0;
+    msgMenuId = null; emojiOpen = false; memberMenuOpen = false; bannedNow = false;
+    showAuthScreen();
+}
+/* ── THEME (dark / light) ────────────────────────────────────────────── */
+const THEME_KEY = 'amnps_theme';
+const themeIsLight = () => document.documentElement.getAttribute('data-theme') === 'light';
+function applyTheme() {
+    const label = themeIsLight() ? '☀️' : '🌙';
+    ['authThemeBtn', 'chatThemeBtn', 'chatThemeBtnM'].forEach(id => {
+        const b = $(id); if (b) b.textContent = label;
+    });
+    const ml = $('mobileThemeLabel'), mt = $('mobileThemeText');
+    if (ml) ml.textContent = label;
+    if (mt) mt.textContent = 'Theme: ' + (themeIsLight() ? 'Light' : 'Dark');
+}
+function cycleTheme() {
+    const next = themeIsLight() ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* storage unavailable */ }
+    applyTheme();
+}
+/* Follow live OS theme changes while the user hasn't picked a theme yet */
+try {
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ev => {
+        let saved = null;
+        try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* ignore */ }
+        if (saved !== 'dark' && saved !== 'light') {
+            document.documentElement.setAttribute('data-theme', ev.matches ? 'light' : 'dark');
+        }
+        applyTheme();
+    });
+} catch (e) { /* older browsers — theme stays as loaded */ }
+
+/* Boot loader helper */
+function hideBoot() {
+    const b = $('bootLoader');
+    if (b) { b.classList.add('hide'); setTimeout(() => { if (b) b.remove(); }, 500); }
+}
+
+/* ── SESSION BOOTSTRAP ───────────────────────────────────────────────── */
+async function bootstrap() {
+    const { data } = await sb.auth.getSession();
+    const user = data.session ? data.session.user : null;
+    if (!user) { resetToAuth(); return; }
+    uid = user.id;
+    hide('authScreen');
+    let p = null;
+    for (let i = 0; i < 5 && !p; i++) {
+        const r = await sb.from('profiles').select('*').eq('id', uid).maybeSingle();
+        if (!r.error) p = r.data;
+        else { await new Promise(res => setTimeout(res, 800)); }
+    }
+    if (!p) { toast('Profile not ready yet — tap Login again in a few seconds.', 'err'); resetToAuth(); return; }
+    myProfile = p;
+    isAdmin = myProfile.role === 'admin';
+    if (myProfile.banned_at) { showBanned(myProfile.ban_reason); return; }
+    enterChat();
+    if (recoveryPending) { recoveryPending = false; promptNewPassword(); }
+}
+
+function enterChat() {
+    show('chatScreen'); hide('bannedScreen');
+    $('gearBtn').classList.toggle('hidden', !isAdmin);
+    if ($('mobileGearBtn')) $('mobileGearBtn').classList.toggle('hidden', !isAdmin);
+    $('announceBtn').classList.toggle('hidden', !isAdmin);
+    renderMyAvatar();
+    closeEmoji();
+    loadLock();
+    loadMessages();
+    subscribeRealtime();
+    startPresence();
+    startBanWatch();
+}
+
+function renderMyAvatar() {
+    const btn = $('profileBtn');
+    const el = $('myAvatarInitial');
+    if (btn) btn.style.background = myProfile ? (myProfile.avatar_color || '#38bdf8') : 'rgba(14,165,233,0.12)';
+    if (el) el.textContent = myProfile ? initials(myProfile.display_name) : '?';
+}
+
+function showBanned(reason) {
+    bannedNow = true;
+    hide('chatScreen'); hide('adminPanel'); hide('profileModal');
+    $('bannedReason').textContent = (reason && reason.trim()) ? reason : 'You can no longer take part in this chat.';
+    show('bannedScreen');
+}
+
+/* ── LOCK / PRESENCE / BAN WATCH ─────────────────────────────────────── */
+async function loadLock() {
+    if (!sb) return;
+    try {
+        const { data } = await sb.from('app_settings').select('value').eq('key', 'chat_locked').maybeSingle();
+        locked = data ? data.value === 'true' : false;
+    } catch (e) { locked = false; }
+    applyLockUI();
+}
+function applyLockUI() {
+    const memberLocked = locked && !isAdmin;
+    $('lockBanner').classList.toggle('hidden', !memberLocked);
+    ['sendBtn', 'textInput', 'emojiBtn', 'announceBtn'].forEach(id => {
+        const el = $(id); if (el) el.classList.toggle('pointer-events-none', memberLocked);
+    });
+    const lbl = document.querySelector('label[for="fileInput"]');
+    if (lbl) lbl.classList.toggle('pointer-events-none', memberLocked);
+    $('composerNote').textContent = memberLocked ? 'Chat is locked by the admin — check back soon.' : '';
+}
+function startPresence() {
+    setInterval(async () => {
+        if (sb && uid) {
+            try { await sb.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', uid); } catch (e) { /* ignore */ }
+        }
+    }, 45000);
+}
+function startBanWatch() {
+    setInterval(async () => {
+        if (!sb || !uid || bannedNow) return;
+        try {
+            const { data } = await sb.from('profiles').select('banned_at,ban_reason').eq('id', uid).maybeSingle();
+            if (data && data.banned_at) showBanned(data.ban_reason);
+        } catch (e) { /* ignore */ }
+    }, 20000);
+}
+
+async function logout() {
+    try { if (sb) await sb.auth.signOut(); } catch (e) { /* ignore */ }
+    resetToAuth();
+}
+/* ── CHAT: MESSAGES ──────────────────────────────────────────────────── */
+async function loadMessages() {
+    if (!sb) return;
+    try {
+        $('msgEmpty').classList.add('hidden');
+        $('msgList').innerHTML = skeletonFeed(5);
+        const { data, error } = await sb.from('chat_messages')
+            .select('*').order('created_at', { ascending: true }).limit(HISTORY_LIMIT);
+        if (error) { console.error(error); toast('Could not load messages.', 'err'); renderMessages(false); return; }
+        const near = wasNearBottom();
+        Object.keys(synced).forEach(k => delete synced[k]);
+        messages.length = 0;
+        (data || []).forEach(m => { synced[m.id] = 1; messages.push(m); });
+        renderMessages(near, true);
+    } catch (e) { console.error(e); renderMessages(false); }
+}
+
+/* Shimmering placeholder bubbles shown while history loads */
+function skeletonFeed(n) {
+    let h = '';
+    for (let i = 0; i < n; i++) {
+        const mine = i % 3 === 2;
+        h += '<div class="flex items-end gap-2 my-2 px-1"' + (mine ? ' style="flex-direction:row-reverse"' : '') + '>' +
+            '<span class="skel w-8 h-8 rounded-full shrink-0"></span>' +
+            '<div class="' + (mine ? 'bg-emerald-500/15' : 'bub') + ' border bd rounded-2xl px-3.5 py-3">' +
+            '<div class="skel h-2.5 w-24 mb-2"></div>' +
+            '<div class="skel h-2.5 ' + (i % 2 ? 'w-36' : 'w-28') + '"></div>' +
+            '</div></div>';
+    }
+    return h;
+}
+
+function wasNearBottom() {
+    const f = $('feed');
+    return (f.scrollHeight - f.scrollTop - f.clientHeight) < 140;
+}
+function scrollToBottom() {
+    const f = $('feed');
+    f.scrollTop = f.scrollHeight;
+    $('msgEmpty').classList.toggle('hidden', messages.length > 0);
+}
+
+function bubbleHtml(m) {
+    const mine = m.sender_id === uid;
+    const an = !!m.is_announcement;
+    const color = m.sender_avatar_color || '#38bdf8';
+    const name = esc(m.sender_name || 'Someone');
+    const time = esc(fmtTime(m.created_at));
+
+    let body = '';
+    if (m.image_url) {
+        body += '<img src="' + esc(m.image_url) + '" data-src="' + esc(m.image_url) + '" loading="lazy" alt="Photo" ' +
+            'class="mt-1 rounded-xl border bd w-full max-h-80 object-cover cursor-zoom-in">';
+    }
+    if (m.content) {
+        body += '<p class="whitespace-pre-wrap break-words text-sm leading-relaxed t1 mt-0.5">' + esc(m.content) + '</p>';
+    }
+    const menu = isAdmin ? (
+        '<span class="relative shrink-0" id="msgmenu-' + m.id + '">' +
+        '<button type="button" class="msg-menu-btn h-8 w-8 rounded-lg sur border bd hover:border-purple-400 text-purple-300 text-sm flex items-center justify-center" data-id="' + m.id + '" aria-label="Message options">⋮</button>' +
+        '<span class="msg-menu hidden absolute bottom-full mb-1 right-0 w-36 glass-panel rounded-xl border bd z-40 overflow-hidden">' +
+        '<button type="button" class="msg-del-btn w-full px-3 py-2 text-left text-[11px] font-bold text-red-300 hover-soft" data-id="' + m.id + '">🗑 Delete message</button>' +
+        '<button type="button" class="msg-ban-btn w-full px-3 py-2 text-left text-[11px] font-bold text-red-400 hover-soft" data-id="' + m.id + '">🚫 Ban sender</button>' +
+        '</span></span>'
+    ) : '';
+
+    if (an) {
+        return '<div class="my-2 w-full anim-glow">' +
+            '<div class="w-full bg-amber-500/10 border border-amber-400/40 rounded-2xl px-4 py-2.5">' +
+            '<div class="flex items-center justify-between gap-2">' +
+            '<p class="text-[10px] font-black text-amber-300 tracking-widest uppercase">📢 Announcement · ' + name + ' · ' + time + '</p>' +
+            menu + '</div>' + body + '</div></div>';
+    }
+    const avatar = mine ? '' :
+        '<span class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold" style="background:' + esc(color) + '">' + esc(initials(name)) + '</span>';
+    const meta = mine
+        ? '<p class="text-[10px] t3 text-right">' + time + '</p>'
+        : '<p class="text-[10px] font-bold" style="color:' + esc(color) + '">' + name + ' <span class="t3 font-normal">· ' + time + '</span></p>';
+    const bubbleCls = mine
+        ? 'bg-emerald-500/15 border border-emerald-500/40'
+        : 'bub border bd';
+    const maxw = 'max-w-[78%] sm:max-w-[70%]';
+    return '<div class="flex items-end gap-2 my-1 px-1"' + (mine ? ' style="flex-direction:row-reverse"' : '') + '>' +
+        avatar +
+        '<div class="' + maxw + ' rounded-2xl px-3.5 py-2 ' + bubbleCls + '">' + meta + body + '</div>' +
+        menu + '</div>';
+}
+
+function renderMessages(scrollDown, animate) {
+    const list = $('msgList');
+    let html = '';
+    for (const m of messages) html += bubbleHtml(m);
+    list.innerHTML = html;
+    $('msgEmpty').classList.toggle('hidden', messages.length > 0);
+    if (animate) {
+        Array.from(list.children).forEach((el, i) => {
+            el.classList.add('anim-pop');
+            el.style.animationDelay = Math.min(i * 35, 350) + 'ms';
+        });
+    }
+    if (scrollDown) requestAnimationFrame(scrollToBottom);
+}
+
+function appendMessage(m) {
+    if (!m || !m.id || synced[m.id]) return;
+    synced[m.id] = 1;
+    const near = wasNearBottom();
+    messages.push(m);
+    const list = $('msgList');
+    if (list) {
+        list.insertAdjacentHTML('beforeend', bubbleHtml(m));
+        const el = list.lastElementChild;
+        if (el) el.classList.add('anim-pop');
+    }
+    $('msgEmpty').classList.toggle('hidden', messages.length > 0);
+    if (near) requestAnimationFrame(scrollToBottom);
+}
+
+/* ── REALTIME ────────────────────────────────────────────────────────── */
+function subscribeRealtime() {
+    if (!sb || !uid) return;
+    try {
+        sb.channel('chat')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+                p => appendMessage(p.new))
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'chat_messages' },
+                p => {
+                    const id = p.old && p.old.id;
+                    if (id) {
+                        const i = messages.findIndex(x => x.id === id);
+                        if (i > -1) { messages.splice(i, 1); delete synced[id]; renderMessages(false); }
+                    }
+                })
+            .subscribe();
+        sb.channel('me')
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: 'id=eq.' + uid },
+                p => {
+                    const nw = p.new || {};
+                    if (bannedNow) {
+                        if (!nw.banned_at) { myProfile = Object.assign({}, myProfile, nw); bannedNow = false; show('chatScreen'); hide('bannedScreen'); renderMyAvatar(); }
+                    } else if (nw.banned_at) { myProfile = Object.assign({}, myProfile, nw); showBanned(nw.ban_reason); }
+                })
+            .subscribe();
+        sb.channel('settings')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => loadLock())
+            .subscribe();
+        if (isAdmin) {
+            sb.channel('adm')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' },
+                    () => { if (!$('adminPanel').classList.contains('hidden')) loadMembers(); })
+                .subscribe();
+        }
+    } catch (e) { console.error(e); }
+}
+/* ── COMPOSER / SEND ─────────────────────────────────────────────────── */
+function toggleAnnounceMode() {
+    if (!isAdmin) return;
+    announceMode = !announceMode;
+    $('announceBtn').classList.toggle('ring-2', announceMode);
+    $('announceBtn').classList.toggle('ring-amber-300/80', announceMode);
+    $('composerNote').textContent = announceMode ? '📢 Sending as an ANNOUNCEMENT (highlighted for everyone).' : '';
+    toast(announceMode ? 'Announcement mode ON 📢' : 'Normal message mode', announceMode ? 'ok' : '');
+}
+
+async function sendMessage() {
+    if (!sb) return;
+    const text = $('textInput').value.trim();
+    const files = pendingImages.slice();
+    if (!text && files.length === 0) return;
+    if (!isAdmin && locked) { toast('Chat is locked right now.', 'err'); return; }
+    const btn = $('sendBtn');
+    btn.disabled = true;
+    const oldHtml = btn.innerHTML;
+    btn.innerHTML = '<span class="spin"></span>';
+    try {
+        if (files.length > 0) {
+            for (let i = 0; i < files.length; i++) {
+                const f = files[i].file;
+                const safe = (f.name || 'pic').replace(/[^a-zA-Z0-9._-]/g, '_');
+                const path = uid + '/' + Date.now() + '-' + i + '-' + safe;
+                const { error: upErr } = await sb.storage.from('chat-images').upload(path, f, { contentType: f.type || 'image/jpeg', upsert: false });
+                if (upErr) { toast('Upload failed: ' + (upErr.message || 'storage error'), 'err'); continue; }
+                const u = sb.storage.from('chat-images').getPublicUrl(path).data.publicUrl;
+                const cap = (i === 0 && text) ? text : null;
+                const msg = {
+                    sender_id: uid, sender_name: myProfile.display_name,
+                    sender_avatar_color: myProfile.avatar_color,
+                    content: cap, image_url: u,
+                    is_announcement: announceMode && isAdmin
+                };
+                const { error: ie } = await sb.from('chat_messages').insert(msg);
+                if (ie) { toast(userFriendlyErr(ie), 'err'); loadLock(); }
+            }
+            clearComposer();
+        } else {
+            const msg = {
+                sender_id: uid, sender_name: myProfile.display_name,
+                sender_avatar_color: myProfile.avatar_color,
+                content: text, image_url: null,
+                is_announcement: announceMode && isAdmin
+            };
+            const { error: ie } = await sb.from('chat_messages').insert(msg);
+            if (ie) { toast(userFriendlyErr(ie), 'err'); loadLock(); return; }
+            clearComposer();
+        }
+    } catch (e) { console.error(e); toast('Could not send message.', 'err'); }
+    finally { btn.disabled = false; btn.innerHTML = oldHtml; }
+}
+function clearComposer() {
+    $('textInput').value = '';
+    pendingImages.length = 0;
+    renderPreviewChips();
+    const t = $('textInput');
+    t.focus && t.focus();
+}
+
+/* ── IMAGE PICKING ───────────────────────────────────────────────────── */
+function onPickedImages(ev) {
+    const files = Array.from(ev.target.files || []);
+    ev.target.value = '';
+    for (const f of files) {
+        if (f.type && f.type.indexOf('image/') !== 0) { toast(f.name + ' is not an image.', 'err'); continue; }
+        if (f.size > MAX_IMAGE_MB * 1024 * 1024) { toast(f.name + ' is over ' + MAX_IMAGE_MB + 'MB.', 'err'); continue; }
+        if (pendingImages.length >= 4) { toast('Up to 4 pictures at once.', 'err'); break; }
+        pendingImages.push({ file: f, preview: URL.createObjectURL(f) });
+    }
+    renderPreviewChips();
+}
+function renderPreviewChips() {
+    const wrap = $('cPreview');
+    wrap.classList.toggle('hidden', pendingImages.length === 0);
+    wrap.innerHTML = '';
+    pendingImages.forEach((p, i) => {
+        const d = document.createElement('div');
+        d.className = 'relative';
+        d.innerHTML = '<img src="' + p.preview + '" alt="preview" class="h-16 w-16 rounded-xl object-cover border bd">' +
+            '<button type="button" onclick="removePending(' + i + ')" class="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-red-500 text-white text-[10px] leading-none font-bold">✕</button>';
+        wrap.appendChild(d);
+    });
+}
+function removePending(i) {
+    if (pendingImages[i] && pendingImages[i].preview) URL.revokeObjectURL(pendingImages[i].preview);
+    pendingImages.splice(i, 1);
+    renderPreviewChips();
+}
+
+/* ── EMOJI ───────────────────────────────────────────────────────────── */
+function toggleEmojiPicker() {
+    const p = $('emojiPicker');
+    emojiOpen = !emojiOpen;
+    p.classList.toggle('hidden', !emojiOpen);
+    if (!emojiOpen) return;
+    if (!p.dataset.built) {
+        p.dataset.built = '1';
+        p.innerHTML = EMOJIS.map(e => '<button type="button" class="emoji-cell h-9 w-9 text-lg flex items-center justify-center rounded-lg hover-soft transition">' + e + '</button>').join('');
+    }
+}
+function closeEmoji() { emojiOpen = false; const p = $('emojiPicker'); if (p) p.classList.add('hidden'); }
+function insertEmoji(e) {
+    const t = $('textInput');
+    const s = t.selectionStart ?? t.value.length, en = t.selectionEnd ?? s;
+    t.value = t.value.slice(0, s) + e + t.value.slice(en);
+    const pos = s + e.length;
+    t.focus(); t.setSelectionRange(pos, pos);
+    closeEmoji();
+}
+
+/* ── LIGHTBOX ────────────────────────────────────────────────────────── */
+function openLightbox(src) {
+    if (!src) return;
+    const img = $('lightboxImg'), sp = $('lbSpin');
+    if (sp) sp.classList.remove('hidden');
+    img.onload = () => { if (sp) sp.classList.add('hidden'); };
+    img.onerror = () => { if (sp) sp.classList.add('hidden'); };
+    img.src = src;
+    show('lightbox');
+}
+function closeLightbox() { hide('lightbox'); $('lightboxImg').src = ''; }
+/* ── MEMBERS FLYOUT (everyone) ───────────────────────────────────────── */
+function toggleMemberMenu() {
+    const m = $('memberMenu');
+    memberMenuOpen = !memberMenuOpen;
+    m.classList.toggle('hidden', !memberMenuOpen);
+    if (memberMenuOpen) { closeMobileNav(); loadAllMembers(); }
+}
+function closeMemberMenu() { memberMenuOpen = false; $('memberMenu').classList.add('hidden'); }
+
+/* ── MOBILE HAMBURGER NAV ────────────────────────────────────────────── */
+function toggleMobileNav() {
+    const n = $('mobileNav');
+    const opening = !n.classList.contains('open');
+    n.classList.toggle('open', opening);
+    if (opening) closeMemberMenu();
+}
+function closeMobileNav() { const n = $('mobileNav'); if (n) n.classList.remove('open'); }
+/* Outside tap / Escape closes the hamburger menu */
+document.addEventListener('click', e => {
+    const n = $('mobileNav');
+    if (n && n.classList.contains('open') && !n.contains(e.target) && !(e.target.closest && e.target.closest('#hamburgerBtn'))) closeMobileNav();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeMobileNav(); closeMemberMenu(); } });
+
+async function loadAllMembers() {
+    const wrap = $('memberList');
+    if (!sb) { wrap.innerHTML = 'Members appear once the SQL setup has run.'; return; }
+    try {
+        const { data, error } = await sb.rpc('member_directory');
+        if (error || !data) { wrap.innerHTML = 'Members list unavailable.'; return; }
+        if (!data.length) { wrap.innerHTML = '<p class="t3 px-3 py-2">No classmates yet.</p>'; return; }
+        wrap.innerHTML = data.map(u => {
+            const banned = !!u.banned_at;
+            return '<div class="flex items-center gap-2 px-3 py-2 border-b bd">' +
+                '<span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold" style="background:' + esc(u.avatar_color || '#38bdf8') + '">' + esc(initials(u.display_name)) + '</span>' +
+                '<span class="flex-1 min-w-0 truncate t1">' + esc(u.display_name || '') + '</span>' +
+                (u.id === uid ? '<span class="text-[9px] text-sky-400 font-bold">you</span>' : '') +
+                (banned ? '<span class="text-[9px] text-red-400 font-bold">banned</span>' : '') +
+                '</div>';
+        }).join('');
+    } catch (e) { wrap.innerHTML = 'Members list unavailable.'; }
+}
+
+/* ── PROFILE MODAL ───────────────────────────────────────────────────── */
+function openProfileModal() {
+    closeMobileNav();
+    if (!myProfile) return;
+    profColor = myProfile.avatar_color || '#38bdf8';
+    $('profName').value = myProfile.display_name || '';
+    markSwatch('profSwatches', profColor);
+    show('profileModal');
+}
+function closeProfileModal() { hide('profileModal'); }
+async function saveProfile() {
+    const name = $('profName').value.trim();
+    if (!name) { toast('Name cannot be empty.', 'err'); return; }
+    const patch = { display_name: name };
+    if (profColor) patch.avatar_color = profColor;
+    const { error } = await sb.from('profiles').update(patch).eq('id', uid);
+    if (error) { toast(userFriendlyErr(error), 'err'); return; }
+    myProfile.display_name = name;
+    if (profColor) myProfile.avatar_color = profColor;
+    closeProfileModal();
+    renderMyAvatar();
+    toast('Profile updated ✔', 'ok');
+}
+
+/* ── PASSWORD RECOVERY (after reset-link login) ──────────────────────── */
+function promptNewPassword() {
+    openConfirm('Set a new password',
+        'Enter your new password in the chat box and press Send. Minimum 6 characters.',
+        async () => {
+            const pw = prompt('New password (min 6 characters):');
+            if (!pw) { toast('Password change cancelled.', ''); return; }
+            if (pw.length < 6) { toast('Password must be 6+ characters.', 'err'); return; }
+            const { error } = await sb.auth.updateUser({ password: pw });
+            if (error) toast(userFriendlyErr(error), 'err');
+            else toast('Password updated 🔐', 'ok');
+        }, 'OK');
+}
+/* ── ADMIN PANEL ─────────────────────────────────────────────────────── */
+let panelOpen = false;
+function openAdminPanel() {
+    closeMobileNav();
+    if (!isAdmin) return;
+    panelOpen = true;
+    adminTab('members');
+    show('adminPanel');
+    loadMembers();
+    refreshLockBtn();
+}
+function closeAdminPanel() {
+    panelOpen = false;
+    hide('adminPanel');
+    applySearch('');
+    $('admSearch').value = '';
+}
+function adminTab(tab) {
+    const members = tab === 'members';
+    $('admMembersPane').classList.toggle('hidden', !members);
+    $('admToolsPane').classList.toggle('hidden', members);
+    const a = 'bg-purple-500 text-white font-bold shadow shadow-purple-500/20';
+    const i = 't2 hover-soft';
+    $('admTabMembers').className = 'py-2 rounded-lg text-xs font-bold transition ' + (members ? a : i);
+    $('admTabTools').className = 'py-2 rounded-lg text-xs font-bold transition ' + (members ? i : a);
+}
+
+function demoGroups() {
+    /* local stand-in rows so the panel renders nicely in :preview mode */
+    return [
+        { id: 'u-demo1', display_name: 'Enioluwa', email: 'enioluwa@demo', avatar_color: '#38bdf8', role: 'admin', banned_at: null, created_at: new Date().toISOString(), last_seen_at: new Date().toISOString() },
+        { id: 'u-demo2', display_name: 'Tobi', email: 'tobi@demo', avatar_color: '#22c55e', role: 'member', banned_at: null, created_at: new Date().toISOString(), last_seen_at: new Date().toISOString() },
+        { id: 'u-demo3', display_name: 'Ifeoma', email: 'ifeoma@demo', avatar_color: '#a855f7', role: 'member', banned_at: new Date().toISOString(), ban_reason: 'demo ban', created_at: new Date().toISOString(), last_seen_at: new Date().toISOString() }
+    ];
+}
+
+async function loadMembers() {
+    const tb = $('admMembersBody');
+    tb.innerHTML = '<tr><td colspan="3" class="p-3"><div class="skel h-10 w-full"></div></td></tr>' +
+        '<tr><td colspan="3" class="p-3"><div class="skel h-10 w-11/12"></div></td></tr>' +
+        '<tr><td colspan="3" class="p-3"><div class="skel h-10 w-10/12"></div></td></tr>';
+    let data;
+    if (!sb) { data = demoGroups(); }
+    else {
+        const { data: d, error } = await sb.from('profiles')
+            .select('id,email,display_name,avatar_color,role,banned_at,ban_reason,created_at,last_seen_at')
+            .order('created_at', { ascending: true });
+        if (error) { tb.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-red-400">Failed to load members.</td></tr>'; return; }
+        data = d || [];
+    }
+    if (!data.length) { tb.innerHTML = '<tr><td colspan="3" class="p-4 text-center t3">No members yet.</td></tr>'; return; }
+    tb.innerHTML = data.map(u => {
+        const me = u.id === uid;
+        const banned = !!u.banned_at;
+        const admin = u.role === 'admin';
+        const last = u.last_seen_at ? relTime(u.last_seen_at) : '—';
+        const action = (me || admin) ? '<span class="t3 text-[10px]">—</span>' : (banned
+            ? '<button type="button" class="unban-btn px-3 py-1.5 rounded-lg text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/40 text-emerald-300" data-id="' + u.id + '">Unban</button>'
+            : '<button type="button" class="ban-btn px-3 py-1.5 rounded-lg text-[10px] font-bold bg-red-500/10 border border-red-500/40 text-red-300" data-id="' + u.id + '">Ban</button>');
+        return '<tr class="border-b bd' + (banned ? ' opacity-60' : '') + '">' +
+            '<td class="p-2.5"><div class="flex items-center gap-2">' +
+            '<span class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold" style="background:' + esc(u.avatar_color || '#38bdf8') + '">' + esc(initials(u.display_name)) + '</span>' +
+            '<div class="min-w-0 flex-1">' +
+            '<p class="text-xs font-semibold t1 truncate">' + esc(u.display_name || '') +
+            (me ? ' <span class="text-[9px] t3">(you)</span>' : '') +
+            (admin ? ' <span class="text-[9px] text-purple-300 font-bold">ADMIN</span>' : '') + '</p>' +
+            '<p class="text-[10px] t3 truncate">' + esc(u.email || '') + ' · joined ' + fmtShort(u.created_at) + ' · seen ' + last + '</p>' +
+            '</div></div></td>' +
+            '<td class="p-2.5 text-center">' + (banned ? '<span class="text-[10px] text-red-400 font-bold">banned</span>' : admin ? '<span class="text-[10px] text-purple-300 font-bold">staff</span>' : '<span class="text-[10px] text-emerald-400 font-bold">ok</span>') + '</td>' +
+            '<td class="p-2.5 text-center">' + action + '</td></tr>';
+    }).join('');
+}
+/* ── MODERATION ACTIONS ──────────────────────────────────────────────── */
+function memberName(id) {
+    const m = messages.find(x => x.sender_id === id);
+    return m ? m.sender_name : 'this member';
+}
+function askBan(id, label) {
+    openConfirm('Ban ' + (label || memberName(id)) + '?',
+        'They will be blocked from the chat immediately. You can unban them anytime from the Members list.',
+        () => doBan(id), 'Ban');
+}
+async function doBan(id) {
+    if (!sb) { toast('Preview mode — not saved.', ''); return; }
+    const { error } = await sb.from('profiles').update({ banned_at: new Date().toISOString(), ban_reason: 'Banned by the admin.' }).eq('id', id);
+    if (error) { toast(userFriendlyErr(error), 'err'); return; }
+    toast('Member banned 🚫', 'ok');
+    loadMembers();
+}
+async function doUnban(id) {
+    if (!sb) { toast('Preview mode — not saved.', ''); return; }
+    const { error } = await sb.from('profiles').update({ banned_at: null, ban_reason: null }).eq('id', id);
+    if (error) { toast(userFriendlyErr(error), 'err'); return; }
+    toast('Member unbanned ✅', 'ok');
+    loadMembers();
+}
+
+function toggleMsgMenu(id) {
+    const cur = msgMenuEl(id);
+    if (msgMenuId && msgMenuId !== id) closeMsgMenu();
+    if (msgMenuId === id) { closeMsgMenu(); return; }
+    msgMenuId = id;
+    if (cur) { cur.classList.remove('hidden'); cur.classList.add('flex'); }
+}
+function closeMsgMenu() {
+    if (msgMenuId) {
+        const cur = msgMenuEl(msgMenuId);
+        if (cur) { cur.classList.add('hidden'); cur.classList.remove('flex'); }
+    }
+    msgMenuId = null;
+}
+function msgMenuEl(id) {
+    const holder = $('msgmenu-' + id);
+    return holder ? holder.querySelector('.msg-menu') : null;
+}
+function askDelete(id) {
+    openConfirm('Delete this message?',
+        'It will disappear for everyone. Its image (if any) is removed from storage too.',
+        () => deleteMessage(id), 'Delete');
+}
+async function deleteMessage(id) {
+    if (!sb) { toast('Preview mode — nothing deleted.', ''); return; }
+    const { error } = await sb.from('chat_messages').delete().eq('id', id);
+    if (error) { toast(userFriendlyErr(error), 'err'); return; }
+    const idx = messages.findIndex(x => x.id === id);
+    if (idx > -1) {
+        const m = messages[idx];
+        if (m.image_url) {
+            const path = m.image_url.split('/chat-images/')[1];
+            if (path) { try { await sb.storage.from('chat-images').remove([path]); } catch (e) { /* non-fatal */ } }
+        }
+        messages.splice(idx, 1);
+    }
+    closeMsgMenu();
+    renderMessages(false);
+    applySearch($('admSearch').value);
+    toast('Message deleted 🗑', 'ok');
+}
+function clearChat() {
+    openConfirm('Delete ALL messages?',
+        'This wipes the entire chat for everyone. The chat will be empty afterwards. This cannot be undone.',
+        async () => {
+            if (!sb) { toast('Preview mode — nothing deleted.', ''); messages.length = 0; renderMessages(false); return; }
+            const { error } = await sb.from('chat_messages').delete().gt('created_at', '1970-01-01T00:00:00Z');
+            if (error) { toast(userFriendlyErr(error), 'err'); return; }
+            Object.keys(synced).forEach(k => delete synced[k]);
+            messages.length = 0;
+            renderMessages(false);
+            toast('Chat cleared 🧹', 'ok');
+        }, 'Delete everything');
+}
+
+async function exportChat() {
+    let lines = [];
+    if (sb) {
+        const { data, error } = await sb.from('chat_messages').select('*').order('created_at', { ascending: true }).limit(5000);
+        if (!error) lines = data || [];
+    } else { lines = messages.slice(); }
+    const out = [];
+    out.push('AMNPS 2019/2020 SET — class chat export');
+    out.push('Exported: ' + new Date().toLocaleString());
+    out.push('='.repeat(56));
+    (lines || []).forEach(m => {
+        out.push('[' + fmtFull(m.created_at) + '] ' + (m.is_announcement ? '📢 ' : '') + (m.sender_name || '?') + ': ' +
+            (m.content || '') + (m.image_url ? ' (📷 ' + m.image_url + ')' : ''));
+    });
+    downloadText('amnps-chat-export-' + Date.now() + '.txt', out.join('\n'));
+    toast('Chat export downloaded 📥', 'ok');
+}
+function downloadText(name, text) {
+    const b = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(b);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function applySearch(q) {
+    q = (q || '').trim().toLowerCase();
+    const info = $('admSearchInfo');
+    if (!q) {
+        info.textContent = '';
+        renderMessages(false);
+        return;
+    }
+    const hits = messages.filter(m =>
+        (m.content || '').toLowerCase().includes(q) || (m.sender_name || '').toLowerCase().includes(q));
+    info.textContent = hits.length + ' match' + (hits.length === 1 ? '' : 'es') + ' — clear the box to see the full chat.';
+    $('msgList').innerHTML = hits.map(m => bubbleHtml(m)).join('');
+}
+
+async function toggleChatLock() {
+    if (!sb) { locked = !locked; applyLockUI(); refreshLockBtn(); return; }
+    const { data: exist } = await sb.from('app_settings').select('*').eq('key', 'chat_locked').maybeSingle();
+    const next = !locked;
+    if (exist) {
+        const { error } = await sb.from('app_settings').update({ value: String(next) }).eq('key', 'chat_locked');
+        if (error) { toast(userFriendlyErr(error), 'err'); return; }
+    } else {
+        const { error } = await sb.from('app_settings').insert({ key: 'chat_locked', value: String(next) });
+        if (error) { toast(userFriendlyErr(error), 'err'); return; }
+    }
+    locked = next;
+    applyLockUI();
+    refreshLockBtn();
+    toast(next ? 'Chat locked 🔒' : 'Chat unlocked 🔓', 'ok');
+}
+function refreshLockBtn() {
+    const b = $('admLockBtn');
+    b.textContent = locked ? '🔒 Unlock chat' : '🔓 Lock chat';
+}
+/* ── CONFIRM DIALOG ──────────────────────────────────────────────────── */
+function openConfirm(title, msg, okFn, okLabel) {
+    $('confirmTitle').textContent = title;
+    $('confirmMsg').textContent = msg;
+    $('confirmOk').textContent = okLabel || 'Yes';
+    confirmOkFn = okFn;
+    show('confirmModal');
+}
+function runConfirmOk() {
+    const f = confirmOkFn;
+    confirmOkFn = null;
+    hide('confirmModal');
+    if (f) { try { f(); } catch (e) { console.error(e); toast('Something went wrong.', 'err'); } }
+}
+function closeConfirm() { confirmOkFn = null; hide('confirmModal'); }
+
+/* ── GLOBAL CLICK DELEGATION ─────────────────────────────────────────── */
+document.addEventListener('click', ev => {
+    const cell = ev.target.closest ? ev.target.closest('.emoji-cell') : null;
+    if (cell) { insertEmoji(cell.textContent); return; }
+    const img = ev.target.closest ? ev.target.closest('[data-src]') : null;
+    if (img && img.tagName === 'IMG') { openLightbox(img.dataset.src || img.src); return; }
+    if (ev.target.closest) {
+        const del = ev.target.closest('.msg-del-btn');
+        if (del) { ev.stopPropagation(); askDelete(del.dataset.id); return; }
+        const bn = ev.target.closest('.msg-ban-btn');
+        if (bn) { ev.stopPropagation(); askBan(bn.dataset.id, ''); return; }
+        const bb = ev.target.closest('.ban-btn');
+        if (bb) { ev.stopPropagation(); askBan(bb.dataset.id, ''); return; }
+        const ub = ev.target.closest('.unban-btn');
+        if (ub) { ev.stopPropagation(); doUnban(ub.dataset.id); return; }
+        const mm = ev.target.closest('.msg-menu-btn');
+        if (mm) { ev.stopPropagation(); toggleMsgMenu(mm.dataset.id); return; }
+    }
+    if (emojiOpen && !ev.target.closest('#emojiPicker') && !ev.target.closest('#emojiBtn')) closeEmoji();
+    if (memberMenuOpen && !ev.target.closest('#memberMenu') && !ev.target.closest('#memberMenuBtn')) closeMemberMenu();
+    if (msgMenuId && !ev.target.closest('.msg-menu-btn') && !ev.target.closest('.msg-menu')) closeMsgMenu();
+});
+document.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape') {
+        closeEmoji(); closeMemberMenu(); closeMsgMenu(); closeConfirm();
+        if (!$('lightbox').classList.contains('hidden')) closeLightbox();
+    }
+});
+
+/* ── PREVIEW MODE (test the UI without a backend) ────────────────────── */
+const previewSelf = 'preview-self-id';
+function demoImage() {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420">' +
+        '<rect width="100%" height="100%" fill="#0ea5e9"/><rect y="300" width="100%" height="120" fill="#0369a1"/>' +
+        '<text x="320" y="190" font-size="130" text-anchor="middle">🎓</text></svg>';
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+function runPreview(mode) {
+    const now = Date.now();
+    const mins = n => new Date(now - n * 60000).toISOString();
+    myProfile = {
+        id: previewSelf, display_name: mode === 'admin' ? 'Enoch Boluwatife' : 'Demo Member',
+        avatar_color: '#2563eb', role: mode === 'admin' ? 'admin' : 'member'
+    };
+    uid = previewSelf;
+    isAdmin = myProfile.role === 'admin';
+    locked = mode === 'locked';
+    const others = [
+        { id: 'u-2', name: 'Enioluwa', color: '#38bdf8' },
+        { id: 'u-3', name: 'Tobi', color: '#22c55e' },
+        { id: 'u-4', name: 'Ifeoma', color: '#a855f7' }
+    ];
+    const mk = (id, sender, content, image_url, off, an) => ({
+        id: id, created_at: mins(off), sender_id: sender.id, sender_name: sender.name || sender.display_name || 'Someone',
+        sender_avatar_color: sender.color || sender.avatar_color || '#38bdf8', content: content, image_url: image_url || null, is_announcement: !!an
+    });
+    messages.length = 0; Object.keys(synced).forEach(k => delete synced[k]);
+    const demoMsgs = [
+        mk('m1', others[0], 'Good morning everyone ☀️', null, 58),
+        mk('m2', others[1], 'Morning! Who remembers the first exam we wrote together? 😂', null, 52),
+        mk('m3', others[0], 'LOL the maths mock!! I still have nightmares about it 🥲', null, 47),
+        mk('m4', others[2], 'Class picture from our last reunion 👇', demoImage(), 40),
+        mk('m5', myProfile, 'Rhe reunion was epic. Same time next year?', null, 33),
+        mk('m6', others[1], '100% count me in 🎉', null, 28),
+        mk('m7', others[0], 'The old school compound has really changed…', null, 15),
+        mk('m8', myProfile, 'Attention everyone! Orientation for new members is Friday by 4pm. Be there! 🎓', null, 5, true),
+        mk('m9', others[2], 'Got it! Thank you admin 🙌', null, 2)
+    ];
+    if (mode === 'locked') {
+        demoMsgs.push(mk('m10', myProfile, 'Orientation still holds this Friday. This chat is locked until then. 🔒', null, 1, true));
+    }
+    demoMsgs.forEach(m => { synced[m.id] = 1; messages.push(m); });
+    show('chatScreen');
+    hide('authScreen'); hide('bannedScreen');
+    $('gearBtn').classList.toggle('hidden', !isAdmin);
+    if ($('mobileGearBtn')) $('mobileGearBtn').classList.toggle('hidden', !isAdmin);
+    $('announceBtn').classList.toggle('hidden', !isAdmin);
+    renderMyAvatar();
+    applyLockUI();
+    renderMessages(true, true);
+    if (mode === 'admin') setTimeout(openAdminPanel, 500);
+    toast('Preview mode — ' + (isAdmin ? 'viewing as ADMIN' : 'viewing as a member'), '');
+}
+
+function applyPreviewMemberList() {
+    const wrap = $('memberList');
+    if (wrap) wrap.innerHTML = demoGroups().map(u =>
+        '<div class="flex items-center gap-2 px-3 py-2 border-b bd">' +
+        '<span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold" style="background:' + esc(u.avatar_color) + '">' + esc(initials(u.display_name)) + '</span>' +
+        '<span class="flex-1 min-w-0 truncate t1">' + esc(u.display_name) + '</span></div>').join('');
+}
+
+/* ── BOOT ────────────────────────────────────────────────────────────── */
+(function init() {
+    setTimeout(hideBoot, 5000); /* safety: never leave the boot screen stuck */
+    applyTheme();
+    buildSwatches('colorSwatches', c => { regColor = c; });
+    buildSwatches('profSwatches', c => { profColor = c; });
+    switchAuthTab('login');
+    const params = new URLSearchParams(window.__PARAMS_OVERRIDE || location.search);
+    if (params.get('preview') !== null) {
+        runPreview(params.get('preview') || '');
+        applyPreviewMemberList();
+        if (params.get('nav') === 'open') setTimeout(toggleMobileNav, 250);
+        hideBoot();
+        return;
+    }
+    if (!window.supabase || !supabase.createClient) {
+        toast('Could not load the chat engine — check your internet connection.', 'err');
+        hideBoot();
+        return;
+    }
+    try {
+        sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } catch (e) {
+        toast('Could not connect to the chat service.', 'err');
+        hideBoot();
+        return;
+    }
+    sb.auth.onAuthStateChange(ev => {
+        if (ev === 'SIGNED_OUT') resetToAuth();
+        if (ev === 'RECOVERY') recoveryPending = true;
+    });
+    bootstrap().catch(err => { console.error(err); }).finally(hideBoot);
+})();
+</script>
 </body>
 </html>

@@ -1,0 +1,254 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   AMNPS 2019/2020 SET · Class Chat — Theme + Animations + Loaders
+   Pure CSS · no dependencies · transform/opacity only (GPU-friendly)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. THEME TOKENS ─────────────────────────────────────────────────── */
+:root, [data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #030712;
+    --panel: rgba(11, 15, 25, 0.72);
+    --sur: #0b0f19;            /* solid input/header surface    */
+    --sur2: #111625;           /* table header / alt surface    */
+    --bub: #1e293b;            /* other user bubble             */
+    --hdr: rgba(11, 15, 25, 0.85);
+    --ftr: rgba(11, 15, 25, 0.92);
+    --t1: #f9fafb;
+    --t2: #9ca3af;
+    --t3: #64748b;
+    --bd: rgba(255, 255, 255, 0.09);
+    --bd2: rgba(255, 255, 255, 0.14);
+    --ov: rgba(0, 0, 0, 0.7);
+    --emerald-tint: rgba(16, 185, 129, 0.15);
+    --amber-tint: rgba(245, 158, 11, 0.12);
+    --shimmer-a: rgba(255, 255, 255, 0.05);
+    --shimmer-b: rgba(255, 255, 255, 0.13);
+}
+[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f1f5f9;
+    --panel: rgba(255, 255, 255, 0.86);
+    --sur: #ffffff;
+    --sur2: #e2e8f0;
+    --bub: #ffffff;
+    --hdr: rgba(255, 255, 255, 0.92);
+    --ftr: rgba(255, 255, 255, 0.95);
+    --t1: #0f172a;
+    --t2: #475569;
+    --t3: #94a3b8;
+    --bd: rgba(15, 23, 42, 0.10);
+    --bd2: rgba(15, 23, 42, 0.18);
+    --ov: rgba(15, 23, 42, 0.5);
+    --emerald-tint: rgba(16, 185, 129, 0.18);
+    --amber-tint: rgba(245, 158, 11, 0.16);
+    --shimmer-a: rgba(15, 23, 42, 0.05);
+    --shimmer-b: rgba(15, 23, 42, 0.12);
+}
+
+/* Root surface + body (both themes) */
+html, body { background: var(--bg); }
+body {
+    background-color: var(--bg);
+    color: var(--t1);
+    transition: background-color .25s ease, color .25s ease;
+}
+
+/* Soft background glow (subtle, transform/opacity-light) */
+.bg-glow {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+        radial-gradient(600px 400px at 12% 10%, rgba(14,165,233,.10), transparent 65%),
+        radial-gradient(700px 500px at 88% 90%, rgba(168,85,247,.10), transparent 65%);
+}
+[data-theme="light"] .bg-glow {
+    background:
+        radial-gradient(600px 400px at 12% 10%, rgba(14,165,233,.14), transparent 65%),
+        radial-gradient(700px 500px at 88% 90%, rgba(168,85,247,.12), transparent 65%);
+}
+
+/* Glass panel (this is the main surface) */
+.glass-panel {
+    background: var(--panel);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--bd);
+}
+
+/* Semantic helpers */
+.sur  { background: var(--sur); background-color: var(--sur); }
+.t1 { color: var(--t1); }
+.t2 { color: var(--t2); }
+.t3 { color: var(--t3); }
+
+/* ── 2. ANIMATIONS ───────────────────────────────────────────────────── */
+@keyframes am-pop {
+    0%   { opacity: 0; transform: translateY(6px) scale(.96); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes am-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes am-scale {
+    from { opacity: 0; transform: scale(.97); }
+    to   { opacity: 1; transform: scale(1); }
+}
+@keyframes am-drop {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes am-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); }
+    35%      { box-shadow: 0 0 16px 2px rgba(245,158,11,.25); }
+}
+@keyframes am-spin { to { transform: rotate(360deg); } }
+
+.anim-pop   { animation: am-pop  .22s ease both; }
+.anim-fade  { animation: am-fade .18s ease both; }
+.anim-scale { animation: am-scale .22s ease both; }
+.anim-drop  { animation: am-drop .18s ease both; }
+.anim-glow  { animation: am-glow 1.6s ease-in-out 1; }
+
+/* Button press feedback */
+.press:active { transform: scale(.95); }
+
+@media (prefers-reduced-motion: reduce) {
+    .anim-pop, .anim-fade, .anim-scale, .anim-drop, .anim-glow { animation: none !important; }
+    .press:active { transform: none; }
+    html { scroll-behavior: auto; }
+}
+
+/* ── 3. LOADERS ──────────────────────────────────────────────────────── */
+/* Spinner */
+.spin {
+    display: inline-block; width: 1.1em; height: 1.1em; vertical-align: -0.2em;
+    border: 2px solid rgba(255,255,255,.25); border-top-color: currentColor;
+    border-radius: 50%; animation: am-spin .8s linear infinite;
+}
+[data-theme="light"] .spin { border-color: rgba(15,23,42,.25); }
+
+/* Button spinner (inline, replaces label) */
+.btn-spinner { display: inline-flex; align-items: center; gap: .45rem; justify-content: center; }
+.btn-spinner .spin { width: 1.05em; height: 1.05em; }
+
+/* Shimmering skeleton block */
+@keyframes am-shimmer { 100% { background-position: 200% 0; } }
+.skel {
+    background: linear-gradient(110deg, var(--shimmer-a) 30%, var(--shimmer-b) 50%, var(--shimmer-a) 70%);
+    background-size: 200% 100%;
+    animation: am-shimmer 1.4s linear infinite;
+    border-radius: 10px;
+}
+
+/* Full-screen boot loader */
+#bootLoader {
+    position: fixed; inset: 0; z-index: 200; display: flex;
+    flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
+    background: var(--bg); color: var(--t1);
+    transition: opacity .35s ease, visibility .35s ease;
+}
+#bootLoader.hide { opacity: 0; visibility: hidden; pointer-events: none; }
+.boot-ring {
+    width: 64px; height: 64px; border-radius: 50%;
+    border: 4px solid rgba(14,165,233,.15); border-top-color: #38bdf8;
+    animation: am-spin 1s linear infinite;
+}
+.boot-logo {
+    font-size: 1.9rem; font-weight: 900; letter-spacing: .22em;
+    color: #38bdf8; text-shadow: 0 0 24px rgba(56,189,248,.4);
+}
+.boot-sub {
+    font-size: .68rem; font-weight: 700; letter-spacing: .35em;
+    color: var(--t2); text-transform: uppercase;
+}
+
+/* Lightbox image spinner */
+#lightbox .lb-spin {
+    position: absolute; width: 40px; height: 40px; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,.2); border-top-color: #38bdf8;
+    animation: am-spin .9s linear infinite;
+}
+
+/* ── 5. RESPONSIVE NAV & HAMBURGER ───────────────────────────────────── */
+/* Desktop nav bar (visible ≥640px only) */
+.desktop-nav { display: none; align-items: center; gap: .5rem; }
+@media (min-width: 640px) { .desktop-nav { display: flex; } }
+
+/* Mobile nav row (theme toggle + hamburger): visible <640px only */
+.mobile-nav-hidden { display: flex; align-items: center; gap: .5rem; }
+@media (min-width: 640px) { .mobile-nav-hidden { display: none; } }
+
+/* Semantic surface/border helpers used by the markup */
+.bd  { border-color: var(--bd); }
+.hdr { background: var(--hdr); }
+.ftr { background: var(--ftr); }
+.bub { background: var(--bub); }
+
+/* Hamburger button */
+#hamburgerBtn {
+    display: none; align-items: center; justify-content: center;
+    height: 2.5rem; width: 2.5rem; border-radius: .75rem;
+    background: var(--sur); border: 1px solid var(--bd2);
+    font-size: 1.05rem; color: var(--t2);
+}
+@media (max-width: 639px) { #hamburgerBtn { display: flex; } }
+
+/* Slide-down glass dropdown */
+#mobileNav {
+    display: none; position: absolute; top: .75rem; right: .75rem;
+    width: 13.5rem; max-width: calc(100vw - 1.5rem);
+    z-index: 80; border-radius: 1rem; overflow: hidden;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--bd); box-shadow: 0 20px 45px rgba(0,0,0,.45);
+}
+#mobileNav.open { display: block; animation: am-drop .18s ease both; }
+#mobileNav a, #mobileNav button {
+    display: flex; align-items: center; gap: .6rem; width: 100%;
+    padding: .8rem 1rem; color: var(--t1); font-size: .82rem; font-weight: 600;
+    text-align: left; background: transparent; border: 0; transition: background .15s;
+}
+#mobileNav a:hover, #mobileNav button:hover { background: var(--bd2); }
+#mobileNav .hidden { display: none !important; } /* beats #mobileNav button specificity */
+#mobileNav .nav-divider { height: 1px; background: var(--bd); margin: .25rem .75rem; }
+
+/* Theme toggle button */
+.theme-btn {
+    height: 2.5rem; min-width: 2.5rem; padding: 0 .7rem;
+    border-radius: .75rem; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--sur); border: 1px solid var(--bd2); color: var(--t2); font-size: .85rem;
+    font-weight: 700; transition: background .15s, color .15s, transform .15s;
+}
+.theme-btn:hover { color: var(--t1); }
+.theme-btn:active { transform: scale(.95); }
+
+/* Nav icon buttons (avatar / members / gear) */
+.nav-ico {
+    height: 2.5rem; min-width: 2.5rem; width: 2.5rem; padding: 0;
+    border-radius: .75rem; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--sur); border: 1px solid var(--bd2); color: var(--t2); transition: background .15s;
+}
+.nav-ico:hover { background: var(--bd2); }
+
+/* Footer stays pinned: the feed must be allowed to shrink (flexbox min-height:auto bug) */
+#feed { min-height: 0; }
+#chatScreen > footer { flex-shrink: 0; }
+
+/* ── 6. TOKEN HELPERS + LIGHT CONTRAST FIXES ─────────────────────────── */
+.sur2 { background: var(--sur2); }
+.btn-ghost { background: var(--bd2); color: var(--t1); transition: background .15s; }
+.btn-ghost:hover { background: var(--bd); }
+.hover-soft { transition: background .15s; }
+.hover-soft:hover { background: var(--bd2); }
+
+/* Accent text that washes out on light surfaces */
+[data-theme="light"] .text-sky-400    { color: #0369a1; }
+[data-theme="light"] .text-purple-300 { color: #6d28d9; }
+[data-theme="light"] .text-purple-400 { color: #7c3aed; }
+[data-theme="light"] .text-red-300    { color: #b91c1c; }
+[data-theme="light"] .text-red-400    { color: #dc2626; }
+[data-theme="light"] .text-emerald-300 { color: #047857; }
+[data-theme="light"] .text-emerald-400 { color: #047857; }
+[data-theme="light"] .text-amber-300  { color: #b45309; }
+
+@media (prefers-reduced-motion: reduce) {
+    #mobileNav.open { animation: none; }
+}
